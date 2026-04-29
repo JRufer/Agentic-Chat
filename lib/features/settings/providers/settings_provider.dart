@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/mood.dart';
+import '../models/tts_engine.dart';
 import '../../../main.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/config/prompts_config.dart';
@@ -9,7 +10,7 @@ class SettingsState {
   final String agentAttitude;
   final MoodType currentMood;
   final bool autonomousMoodSwitching;
-  final bool useSystemTts;
+  final TtsEngine ttsEngine;
   final bool enableWebSearch;
   final Map<MoodType, String> moodPrompts;
   final String systemContextTemplate;
@@ -19,7 +20,7 @@ class SettingsState {
     required this.agentAttitude,
     required this.currentMood,
     required this.autonomousMoodSwitching,
-    required this.useSystemTts,
+    required this.ttsEngine,
     required this.enableWebSearch,
     required this.moodPrompts,
     required this.systemContextTemplate,
@@ -30,7 +31,7 @@ class SettingsState {
     String? agentAttitude,
     MoodType? currentMood,
     bool? autonomousMoodSwitching,
-    bool? useSystemTts,
+    TtsEngine? ttsEngine,
     bool? enableWebSearch,
     Map<MoodType, String>? moodPrompts,
     String? systemContextTemplate,
@@ -40,22 +41,39 @@ class SettingsState {
       agentAttitude: agentAttitude ?? this.agentAttitude,
       currentMood: currentMood ?? this.currentMood,
       autonomousMoodSwitching: autonomousMoodSwitching ?? this.autonomousMoodSwitching,
-      useSystemTts: useSystemTts ?? this.useSystemTts,
+      ttsEngine: ttsEngine ?? this.ttsEngine,
       enableWebSearch: enableWebSearch ?? this.enableWebSearch,
       moodPrompts: moodPrompts ?? this.moodPrompts,
       systemContextTemplate: systemContextTemplate ?? this.systemContextTemplate,
     );
   }
+
+  // Convenience getter used by VoiceService and other callers.
+  bool get useSystemTts => ttsEngine == TtsEngine.system;
 }
 
 class Settings extends Notifier<SettingsState> {
   @override
   SettingsState build() {
     final prefs = ref.watch(sharedPreferencesProvider);
-    
+
     final prompts = <MoodType, String>{};
     for (var type in MoodType.values) {
       prompts[type] = prefs.getString('prompt_${type.name}') ?? Mood.defaultFor(type).prompt;
+    }
+
+    // Migrate from the old boolean useSystemTts key if present.
+    final TtsEngine engine;
+    final savedEngine = prefs.getString('ttsEngine');
+    if (savedEngine != null) {
+      engine = TtsEngine.values.firstWhere(
+        (e) => e.name == savedEngine,
+        orElse: () => TtsEngine.sherpaVits,
+      );
+    } else if (prefs.getBool('useSystemTts') == true) {
+      engine = TtsEngine.system;
+    } else {
+      engine = TtsEngine.sherpaVits;
     }
 
     return SettingsState(
@@ -66,7 +84,7 @@ class Settings extends Notifier<SettingsState> {
         orElse: () => MoodType.professional,
       ),
       autonomousMoodSwitching: prefs.getBool('autonomousMoodSwitching') ?? false,
-      useSystemTts: prefs.getBool('useSystemTts') ?? false,
+      ttsEngine: engine,
       enableWebSearch: prefs.getBool('enableWebSearch') ?? false,
       moodPrompts: prompts,
       systemContextTemplate: PromptsConfig.defaultSystemContextTemplate,
@@ -93,9 +111,14 @@ class Settings extends Notifier<SettingsState> {
     state = state.copyWith(autonomousMoodSwitching: value);
   }
 
+  void setTtsEngine(TtsEngine engine) {
+    ref.read(sharedPreferencesProvider).setString('ttsEngine', engine.name);
+    state = state.copyWith(ttsEngine: engine);
+  }
+
+  // Kept for backward compatibility with callers that still reference this name.
   void toggleSystemTts(bool value) {
-    ref.read(sharedPreferencesProvider).setBool('useSystemTts', value);
-    state = state.copyWith(useSystemTts: value);
+    setTtsEngine(value ? TtsEngine.system : TtsEngine.sherpaVits);
   }
 
   void toggleWebSearch(bool value) {
