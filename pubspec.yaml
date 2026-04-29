@@ -16,7 +16,7 @@ dependencies:
   google_fonts: ^6.2.1
   shimmer: ^3.0.0
   ffi: ^2.1.2
-  sherpa_onnx: ^1.10.38
+  sherpa_onnx: ^1.10.40
   audio_session: ^0.1.18
   objectbox: any
   objectbox_flutter_libs: any

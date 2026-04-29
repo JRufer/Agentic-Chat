@@ -7,6 +7,27 @@ import '../models/mood.dart';
 import '../models/tts_engine.dart';
 import '../../../core/ai/download_manager.dart';
 
+// Model files required for each downloadable engine.
+const _kokoroFiles = {
+  'kokoro_model.onnx':
+      'https://huggingface.co/csukuangfj/sherpa-onnx-kokoro-en-v0_19/resolve/main/model.onnx',
+  'kokoro_voices.bin':
+      'https://huggingface.co/csukuangfj/sherpa-onnx-kokoro-en-v0_19/resolve/main/voices.bin',
+  'kokoro_tokens.txt':
+      'https://huggingface.co/csukuangfj/sherpa-onnx-kokoro-en-v0_19/resolve/main/tokens.txt',
+};
+
+const _matchaFiles = {
+  'matcha_acoustic.onnx':
+      'https://huggingface.co/csukuangfj/matcha-icefall-en_US-ljspeech/resolve/main/model-steps-3.onnx',
+  'matcha_vocoder.onnx':
+      'https://huggingface.co/csukuangfj/matcha-icefall-en_US-ljspeech/resolve/main/hifigan_v2.onnx',
+  'matcha_lexicon.txt':
+      'https://huggingface.co/csukuangfj/matcha-icefall-en_US-ljspeech/resolve/main/lexicon.txt',
+  'matcha_tokens.txt':
+      'https://huggingface.co/csukuangfj/matcha-icefall-en_US-ljspeech/resolve/main/tokens.txt',
+};
+
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
 
@@ -20,10 +41,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   late TextEditingController _templateController;
   final Map<MoodType, TextEditingController> _moodControllers = {};
 
-  // CosyVoice2 download state
-  bool _cosyVoiceDownloading = false;
-  double _cosyVoiceProgress = 0.0;
-  bool _cosyVoiceDownloaded = false;
+  bool _kokoroDownloading = false;
+  double _kokoroProgress = 0.0;
+  bool _kokoroDownloaded = false;
+
+  bool _matchaDownloading = false;
+  double _matchaProgress = 0.0;
+  bool _matchaDownloaded = false;
 
   @override
   void initState() {
@@ -35,62 +59,81 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     for (var type in MoodType.values) {
       _moodControllers[type] = TextEditingController(text: settings.moodPrompts[type]);
     }
-    _checkCosyVoiceDownloaded();
+    _checkDownloadedModels();
   }
 
-  Future<void> _checkCosyVoiceDownloaded() async {
+  Future<void> _checkDownloadedModels() async {
     final appDocDir = await getApplicationDocumentsDirectory();
     final modelsPath = '${appDocDir.path}/models';
-    final files = [
-      '$modelsPath/cosyvoice2_model.onnx',
-      '$modelsPath/cosyvoice2_tokens.txt',
-      '$modelsPath/cosyvoice2_spk2info.json',
-    ];
-    final allExist = await Future.wait(files.map((p) => File(p).exists()))
-        .then((r) => r.every((e) => e));
-    if (mounted) setState(() => _cosyVoiceDownloaded = allExist);
+
+    final kokoroReady = await Future.wait(
+      _kokoroFiles.keys.map((f) => File('$modelsPath/$f').exists()),
+    ).then((r) => r.every((e) => e));
+
+    final matchaReady = await Future.wait(
+      _matchaFiles.keys.map((f) => File('$modelsPath/$f').exists()),
+    ).then((r) => r.every((e) => e));
+
+    if (mounted) {
+      setState(() {
+        _kokoroDownloaded = kokoroReady;
+        _matchaDownloaded = matchaReady;
+      });
+    }
   }
 
-  Future<void> _downloadCosyVoice2() async {
-    setState(() {
-      _cosyVoiceDownloading = true;
-      _cosyVoiceProgress = 0.0;
-    });
-
-    // CosyVoice2-300M-SFT ONNX export from k2-fsa/sherpa-onnx releases.
-    const modelFiles = {
-      'cosyvoice2_model.onnx':
-          'https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/sherpa-onnx-CosyVoice2-0.5B-EN-JP-ZH.tar.bz2',
-      'cosyvoice2_tokens.txt':
-          'https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/sherpa-onnx-CosyVoice2-0.5B-EN-JP-ZH.tar.bz2',
-      'cosyvoice2_spk2info.json':
-          'https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/sherpa-onnx-CosyVoice2-0.5B-EN-JP-ZH.tar.bz2',
-    };
-
+  Future<void> _downloadEngine(
+    Map<String, String> fileMap,
+    void Function(bool downloading, double progress) onUpdate,
+    void Function(bool downloaded) onDone,
+  ) async {
+    onUpdate(true, 0.0);
     try {
       final downloader = ref.read(modelDownloadProvider);
       int count = 0;
-      for (final entry in modelFiles.entries) {
+      for (final entry in fileMap.entries) {
         await downloader.downloadModel(
           entry.value,
           entry.key,
-          (p) => setState(() {
-            _cosyVoiceProgress = (count + p) / modelFiles.length;
-          }),
+          (p) => onUpdate(true, (count + p) / fileMap.length),
         );
         count++;
       }
-      await _checkCosyVoiceDownloaded();
+      await _checkDownloadedModels();
+      onDone(true);
     } catch (e) {
+      onDone(false);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Download failed: $e'), backgroundColor: Colors.red),
         );
       }
-    } finally {
-      if (mounted) setState(() => _cosyVoiceDownloading = false);
     }
   }
+
+  void _downloadKokoro() => _downloadEngine(
+        _kokoroFiles,
+        (downloading, progress) => setState(() {
+          _kokoroDownloading = downloading;
+          _kokoroProgress = progress;
+        }),
+        (downloaded) => setState(() {
+          _kokoroDownloading = false;
+          _kokoroDownloaded = downloaded;
+        }),
+      );
+
+  void _downloadMatcha() => _downloadEngine(
+        _matchaFiles,
+        (downloading, progress) => setState(() {
+          _matchaDownloading = downloading;
+          _matchaProgress = progress;
+        }),
+        (downloaded) => setState(() {
+          _matchaDownloading = false;
+          _matchaDownloaded = downloaded;
+        }),
+      );
 
   @override
   void dispose() {
@@ -167,8 +210,22 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           const SizedBox(height: 24),
           _buildSectionTitle('Voice & Audio'),
           _buildTtsEngineDropdown(settings, notifier),
-          if (settings.ttsEngine == TtsEngine.cosyVoice2)
-            _buildCosyVoiceDownloadTile(),
+          if (settings.ttsEngine == TtsEngine.kokoro)
+            _buildDownloadTile(
+              label: 'Kokoro TTS models',
+              downloaded: _kokoroDownloaded,
+              downloading: _kokoroDownloading,
+              progress: _kokoroProgress,
+              onDownload: _downloadKokoro,
+            ),
+          if (settings.ttsEngine == TtsEngine.matcha)
+            _buildDownloadTile(
+              label: 'Matcha-TTS models',
+              downloaded: _matchaDownloaded,
+              downloading: _matchaDownloading,
+              progress: _matchaProgress,
+              onDownload: _downloadMatcha,
+            ),
           SwitchListTile(
             title: const Text('Enable Web Search'),
             subtitle: const Text('Allow the AI to search the internet for answers'),
@@ -233,30 +290,36 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     );
   }
 
-  Widget _buildCosyVoiceDownloadTile() {
-    if (_cosyVoiceDownloading) {
+  Widget _buildDownloadTile({
+    required String label,
+    required bool downloaded,
+    required bool downloading,
+    required double progress,
+    required VoidCallback onDownload,
+  }) {
+    if (downloading) {
       return Padding(
         padding: const EdgeInsets.symmetric(vertical: 8.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Downloading CosyVoice 2... ${(_cosyVoiceProgress * 100).toStringAsFixed(1)}%',
+              'Downloading $label... ${(progress * 100).toStringAsFixed(1)}%',
               style: const TextStyle(fontSize: 13),
             ),
             const SizedBox(height: 4),
-            LinearProgressIndicator(value: _cosyVoiceProgress),
+            LinearProgressIndicator(value: progress),
           ],
         ),
       );
     }
 
-    if (_cosyVoiceDownloaded) {
-      return const ListTile(
+    if (downloaded) {
+      return ListTile(
         dense: true,
-        leading: Icon(Icons.check_circle, color: Colors.green),
-        title: Text('CosyVoice 2 models ready'),
         contentPadding: EdgeInsets.zero,
+        leading: const Icon(Icons.check_circle, color: Colors.green),
+        title: Text('$label ready'),
       );
     }
 
@@ -264,10 +327,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       dense: true,
       contentPadding: EdgeInsets.zero,
       leading: const Icon(Icons.download, color: Colors.deepPurpleAccent),
-      title: const Text('CosyVoice 2 models not downloaded'),
-      subtitle: const Text('~500 MB — tap to download'),
+      title: Text('$label not downloaded'),
+      subtitle: const Text('Tap to download'),
       trailing: ElevatedButton(
-        onPressed: _downloadCosyVoice2,
+        onPressed: onDownload,
         child: const Text('Download'),
       ),
     );

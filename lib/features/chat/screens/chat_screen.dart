@@ -345,7 +345,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     final history = ref.watch(chatHistoryProvider);
     
     // Keep voice service in sync with settings
-    _voiceService.useSystemTts = settings.useSystemTts;
+    _voiceService.ttsEngine = settings.ttsEngine;
     
     return Scaffold(
       backgroundColor: Colors.black,

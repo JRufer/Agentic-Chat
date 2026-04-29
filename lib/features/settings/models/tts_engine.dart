@@ -1,7 +1,8 @@
 enum TtsEngine {
   system,
   sherpaVits,
-  cosyVoice2;
+  kokoro,
+  matcha;
 
   String get label {
     switch (this) {
@@ -9,8 +10,10 @@ enum TtsEngine {
         return 'System TTS';
       case TtsEngine.sherpaVits:
         return 'Neural TTS (VITS-LJS)';
-      case TtsEngine.cosyVoice2:
-        return 'CosyVoice 2';
+      case TtsEngine.kokoro:
+        return 'Kokoro TTS';
+      case TtsEngine.matcha:
+        return 'Matcha-TTS';
     }
   }
 
@@ -20,8 +23,10 @@ enum TtsEngine {
         return 'Native Android/iOS voices — no download required';
       case TtsEngine.sherpaVits:
         return 'High-fidelity on-device synthesis (included in setup)';
-      case TtsEngine.cosyVoice2:
-        return 'State-of-the-art voice cloning — download required (~500 MB)';
+      case TtsEngine.kokoro:
+        return 'High-quality multi-speaker — download required (~400 MB)';
+      case TtsEngine.matcha:
+        return 'Fast & expressive LJSpeech voice — download required (~200 MB)';
     }
   }
 }
