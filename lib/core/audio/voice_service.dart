@@ -72,22 +72,33 @@ class VoiceService {
       await _flutterTts.setVolume(1.0);
       await _flutterTts.setPitch(1.0);
 
-      // 3. Check if all required files exist
-      final requiredFiles = [
+      // 3. Check STT model files — these are required for voice input.
+      final requiredSttFiles = [
         '$modelsPath/stt_encoder.onnx',
         '$modelsPath/stt_decoder.onnx',
         '$modelsPath/stt_joiner.onnx',
         '$modelsPath/stt_tokens.txt',
+      ];
+
+      for (final path in requiredSttFiles) {
+        if (!await File(path).exists()) {
+           debugPrint("VoiceService: Missing required STT file: $path");
+           return;
+        }
+      }
+
+      // Check TTS model files separately — missing files fall back to system TTS.
+      final ttsFiles = [
         '$modelsPath/tts_vits_model.onnx',
         '$modelsPath/tts_vits_tokens.txt',
         '$modelsPath/tts_vits_lexicon.txt',
       ];
-
-      for (final path in requiredFiles) {
-        if (!await File(path).exists()) {
-           debugPrint("VoiceService: Missing required file: $path");
-           return;
-        }
+      final ttsFilesPresent = (await Future.wait(
+        ttsFiles.map((p) => File(p).exists()),
+      )).every((exists) => exists);
+      if (!ttsFilesPresent) {
+        debugPrint("VoiceService: Sherpa TTS files not found, using system TTS");
+        useSystemTts = true;
       }
 
       // 4. Initialize Sherpa-ONNX global bindings
@@ -114,20 +125,22 @@ class VoiceService {
       );
       _recognizer = sherpa.OnlineRecognizer(sttConfig);
 
-      // 6. Initialize TTS (VITS-LJS)
-      final ttsConfig = sherpa.OfflineTtsConfig(
-        model: sherpa.OfflineTtsModelConfig(
-          vits: sherpa.OfflineTtsVitsModelConfig(
-            model: '$modelsPath/tts_vits_model.onnx',
-            tokens: '$modelsPath/tts_vits_tokens.txt',
-            lexicon: '$modelsPath/tts_vits_lexicon.txt',
+      // 6. Initialize Sherpa TTS (VITS-LJS) only when model files are present.
+      if (!useSystemTts) {
+        final ttsConfig = sherpa.OfflineTtsConfig(
+          model: sherpa.OfflineTtsModelConfig(
+            vits: sherpa.OfflineTtsVitsModelConfig(
+              model: '$modelsPath/tts_vits_model.onnx',
+              tokens: '$modelsPath/tts_vits_tokens.txt',
+              lexicon: '$modelsPath/tts_vits_lexicon.txt',
+            ),
+            numThreads: 1,
+            debug: true,
+            provider: 'cpu',
           ),
-          numThreads: 1,
-          debug: true,
-          provider: 'cpu',
-        ),
-      );
-      _tts = sherpa.OfflineTts(ttsConfig);
+        );
+        _tts = sherpa.OfflineTts(ttsConfig);
+      }
       _isInitialized = true;
     } catch (e) {
       debugPrint("VoiceService Init Error: $e");
@@ -147,15 +160,19 @@ class VoiceService {
     
     _isListening = true;
     _resultController = StreamController<String>.broadcast();
-    
-    _sttStream = _recognizer?.createStream();
-    
+
+    // _sttStream creation (FFI) is deferred into _startRecording() so the
+    // current frame (mic animation) can render before the synchronous FFI call.
     _startRecording();
     
     return _resultController!.stream;
   }
 
   Future<void> _startRecording() async {
+    // Defer the synchronous FFI createStream() call so the animation frame
+    // triggered by setState in _enterVoiceMode can render before we block.
+    _sttStream = await Future(() => _recognizer?.createStream());
+
     const config = RecordConfig(
       encoder: AudioEncoder.pcm16bits,
       sampleRate: 16000,
