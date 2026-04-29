@@ -1,0 +1,70 @@
+name: agentic_chat
+description: An on-device agentic chat application powered by Gemma 4.
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.2.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.6
+  flutter_riverpod: ^2.5.1
+  riverpod_annotation: ^2.3.5
+  path_provider: ^2.1.2
+  permission_handler: ^11.3.0
+  google_fonts: ^6.2.1
+  shimmer: ^3.0.0
+  ffi: ^2.1.2
+  sherpa_onnx: ^1.10.38
+  audio_session: ^0.1.18
+  objectbox: any
+  objectbox_flutter_libs: any
+  flutter_litert_lm: any
+  shared_preferences: ^2.3.2
+  url_launcher: ^6.3.0
+  dio: ^5.7.0
+  just_audio: ^0.9.40
+  record: ^5.2.0
+  path: ^1.9.0
+  flutter_tts: ^4.2.2
+  flutter_local_notifications: ^18.0.1
+  timezone: ^0.9.4
+  gal: ^2.3.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.1
+  riverpod_generator: ^2.4.0
+  build_runner: ^2.4.8
+  objectbox_generator: ^2.5.0
+  flutter_launcher_icons: ^0.13.1
+  flutter_native_splash: ^2.4.0
+
+dependency_overrides:
+  record_linux: ^1.3.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/models/
+    - assets/moods/
+
+  shaders:
+    - assets/shaders/mood_aura.frag
+
+flutter_launcher_icons:
+  android: "launcher_icon"
+  ios: false
+  image_path: "assets/icon.png"
+  min_sdk_android: 21
+
+flutter_native_splash:
+  color: "#000000"
+  image: "assets/icon.png"
+  android: true
+  ios: false
+  android_12:
+    image: "assets/icon.png"
+    icon_background_color: "#000000"

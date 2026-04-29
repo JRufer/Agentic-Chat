@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(flutter analyze *)",
+      "Bash(.flutter_sdk/bin/flutter analyze *)",
+      "Bash(dart analyze *)",
+      "Bash(./gradlew --stop)",
+      "Bash(pkill -f kotlin-compiler)",
+      "Bash(flutter clean *)",
+      "Bash(/usr/lib/flutter/bin/flutter clean *)",
+      "Bash(flutter run *)",
+      "Bash(sudo mkdir *)",
+      "Bash(sudo chmod *)"
+    ]
+  }
+}
